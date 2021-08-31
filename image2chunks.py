@@ -185,6 +185,9 @@ class EXT4SparseFile(dz.DZStruct):
 				print("[ ]", file=sys.stderr)
 				print("[ ] Debian/Linux variants, install the package android-tools-fsutils", file=sys.stderr)
 			sys.exit(1)
+		except:
+			print("unknown error!")
+			sys.exit(1)
 
 		self.child = child
 
@@ -192,6 +195,8 @@ class EXT4SparseFile(dz.DZStruct):
 
 		# grab the header
 		buf = self.child.stdout.read(self._dz_length)
+		
+		print("buffer size: {:d}".format(len(buf)))
 
 		# parse out the values
 		values = self.unpackdict(buf)
@@ -225,7 +230,9 @@ class EXT4SparseFile(dz.DZStruct):
 		# Block size of the device, power of 2, minimum of 4K
 		size = values['blockSize']
 		self.blockSize = size
-
+		
+		# self.chunkCount = values['totalChunks']
+		
 		if size & (size-1):
 			print("[!] Error: Block size specified in sparse header is not a power of 2", file=sys.stderr)
 			sys.exit(1)
@@ -390,9 +397,13 @@ class Image2Chunks(dz.DZChunk):
 		targetAddr = self.startLBA
 		eof = self.file.seek(0, io.SEEK_END)
 		self.file.seek(0, io.SEEK_SET)
+		
+		print(type(self.file))
+		print(self.file)
 
 		while current < eof:
-			hole = (self.file.seek(current, SEEK_HOLE) + self.blockSize-1) & ~(self.blockSize-1)
+			print("current: {:d}".format(current))
+			hole = (os.lseek(self.file, current, os.SEEK_HOLE) + self.blockSize-1) & ~(self.blockSize-1)
 			# Python's handling of this condition is suboptimal
 			try:
 				next = self.file.seek(hole, SEEK_DATA) & ~(self.blockSize-1)
@@ -465,7 +476,7 @@ class Image2Chunks(dz.DZChunk):
 		Generate one or more .chunks files assuming an EXT4 FS
 		"""
 
-		os.chdir(os.path.dirname(name))
+		#os.chdir(os.path.dirname(name))
 		name = os.path.basename(name)
 		baseName = name.rpartition(".")[0] + "_"
 		sliceName = name.rpartition(".")[0].encode("utf8")
@@ -716,8 +727,10 @@ class Image2Chunks(dz.DZChunk):
 
 		super(Image2Chunks, self).__init__()
 
+		print("Opening {:s}".format(name))
+		
 		self.openFiles(name)
-
+		
 		if self.loadParams(name):
 			if strategy == 0:
 				self.makeChunksEXT4FS(name)
@@ -737,10 +750,10 @@ def help(progname):
 	print("usage: {:s} [-h | --help] [-e | --ext4 | -s | --sparse | -p | --probe] <file(s)>\n".format(progname))
 	print("DZ Chunking program by Elliott Mitchell\n")
 	print("optional arguments:")
-	print("  -h | --help           show this help message and exit")
-	print("  -e | --ext4           use Android's sparse EXT4 dump utility (recommended)")
-	print("  -s | --sparse         use SEEK_DATA/SEEK_HOLE (not available on all OSes)")
-	print("  -p | --probe          probe for holes (safe)")
+	print("	 -h | --help		   show this help message and exit")
+	print("	 -e | --ext4		   use Android's sparse EXT4 dump utility (recommended)")
+	print("	 -s | --sparse		   use SEEK_DATA/SEEK_HOLE (not available on all OSes)")
+	print("	 -p | --probe		   probe for holes (safe)")
 	sys.exit(0)
 
 
@@ -749,7 +762,7 @@ if __name__ == "__main__":
 	progname = sys.argv[0]
 	del sys.argv[0]
 
-	basedir = os.open(".", os.O_DIRECTORY)
+	#basedir = io.open(".", os.O_DIRECTORY)
 
 	# no default strategy, ext2simg is reasonable, but worrisome if non-FS
 	strategy = None
@@ -777,5 +790,5 @@ if __name__ == "__main__":
 
 		Image2Chunks(arg, strategy)
 
-		os.fchdir(basedir)
+		#os.fchdir(basedir)
 

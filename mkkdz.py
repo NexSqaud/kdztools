@@ -123,10 +123,18 @@ class KDZFileTools(kdz.KDZFile):
 			head = {
 				'name':		name.encode("utf8"),
 				'length':	self.files[name][1],
-				'offset': 	self.files[name][0],
+				'offset':	self.files[name][0],
 			}
 			buf = self.packdict(head)
 			out.write(buf)
+		out.seek(1, 1)
+		extras_path = os.path.join(self.indir, "kdz_extras.bin")
+		if os.path.isfile(extras_path):
+			extras = open(extras_path, "rb")
+			extras_length = os.stat(extras_path).st_size
+			print("[+] Write {:d} bytes of extras".format(extras_length))
+			out.write(extras.read(extras_length))
+			extras.close()
 		out.close()
 		print("[+] Done!")
 

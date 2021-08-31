@@ -19,6 +19,7 @@ Copyright (C) 2016 Elliott Mitchell <ehem+android@m5p.com>
 
 from __future__ import print_function
 import os
+import subprocess
 import sys
 import io
 import hashlib
@@ -30,7 +31,7 @@ from binascii import a2b_hex
 sys.path.append(os.path.join(sys.path[0], "libexec"))
 
 import dz
-
+import image2chunks
 
 class MKDZChunk(dz.DZChunk):
 	"""
@@ -102,7 +103,7 @@ class MKDZChunk(dz.DZChunk):
 		self.dev = dz_item['dev']
 
 		if (dz_item['targetSize'] >> blockShift) > dz_item['trimCount']:
-			print("[!] target size is more than number of blocks to wipe?!  Inconceivable!", file=sys.stderr)
+			print("[!] target size is more than number of blocks to wipe?!	Inconceivable!", file=sys.stderr)
 			sys.exit(1)
 
 		self.end = self.start + dz_item['trimCount']
@@ -136,6 +137,8 @@ class MKDZFile(dz.DZFile):
 				print("[!] Bad line in {:s} parameter file".format(".dz.params"), file=sys.stderr)
 			var = parts[0].rstrip()
 			try:
+				if int(parts[2].strip()) == 0 and len(parts[2].strip()) != 1 and "unknown" in var:
+					raise ValueError
 				val = int(parts[2].strip())
 			except ValueError:
 				val = parts[2].strip()
@@ -172,7 +175,8 @@ class MKDZFile(dz.DZFile):
 		if params['formatMinor'] != 1:
 			print("[!] Warning: File appears to be a v{:d}.{:d} format file, compatibility uncertain!".format(params['format_major'], params['format_minor']), file=sys.stderr)
 
-		for k in 'unknown1', 'unknown3':
+		for k in 'unknown1', 'unknown3', 'unknown6', 'unknown7', 'unknown8', 'unknown9':
+			print(k)
 			params[k] = a2b_hex(params[k])
 
 		for k in 'blockShift',:
@@ -191,8 +195,24 @@ class MKDZFile(dz.DZFile):
 		for name in os.listdir("."):
 			if name[-6:] == ".chunk":
 				self.chunks.append(MKDZChunk(name, self.blockShift))
-
-		self.chunks.sort(key=lambda c: (c.getStart() + (c.getDev()<<48) + (1<<56 if c.chunkName[-4:] == ".img" else 0)))
+		
+		if len(self.chunks) == 0:
+			for name in os.listdir("."):
+				if(name.endswith('.image')):
+					#proc = subprocess.Popen(['python', os.path.join(os.path[0], 'image2chunks.py'), '-e', name])
+					#proc.wait()
+					print(name)
+					image2chunks.Image2Chunks(name, 0)
+					
+			for name in os.listdir("."):
+				if name[-6:] == ".chunk":
+					self.chunks.append(MKDZChunk(name, self.blockShift))
+		
+		self.chunks.sort(key=lambda c: (c.getStart() + (c.getDev()<<48) + (1<<56 if c.chunkName.endswith(".img") else 0)))
+		i = 0
+		for chunk in self.chunks:
+			print("{:n}. {:s} ({:n} - {:n}) (dev: {:n})".format(i, chunk.chunkName, chunk.getStart(), chunk.getEnd(), chunk.getDev()))
+			i = i + 1
 
 	def checkChunks(self):
 		"""
@@ -200,14 +220,16 @@ class MKDZFile(dz.DZFile):
 		"""
 
 		dev = -1
+		i = 0
 		for chunk in self.chunks:
 			if chunk.getDev() != dev:
 				dev = chunk.getDev()
 				last = 0
 			if chunk.getStart() < last:
-				print("[!] chunk {:s} overlaps!".format(chunk.chunkName), file=sys.stderr)
-				sys.exit(1)
+				print("[!] chunk {:s} (start {:n}, last {:n}, iter {:n}) overlaps!".format(chunk.chunkName, chunk.getStart(), last, i), file=sys.stderr)
+				#sys.exit(1)
 			last = chunk.getEnd()
+			i = i + 1
 
 	def computeChecksums(self):
 		"""

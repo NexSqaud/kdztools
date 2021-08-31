@@ -47,7 +47,7 @@ class DZStruct(object):
 
 			# Sanity check
 			if self._dz_struct.size != self._dz_length:
-				print("[!] Internal error!  Chunk format wrong! (computed={:d}, specified={:d})".format(self._dz_struct.size, self._dz_length), file=sys.stderr)
+				print("[!] Internal error!	Chunk format wrong! (computed={:d}, specified={:d})".format(self._dz_struct.size, self._dz_length), file=sys.stderr)
 				sys.exit(-1)
 
 		# Generate list of items that can be collapsed (truncated)
@@ -68,8 +68,29 @@ class DZStruct(object):
 		# pad any string keys that need padding
 		for k in self._dz_format_dict.keys():
 			if self._dz_format_dict[k][0][-1] == 's':
+				#if "unknown" in k:	 #[0][-1] == 'p':
+				#	print(k)
+				#	print(type(din[k]))
+				#	a = din[k].decode("utf-8").split(' ')
+				#	b = []
+				#	for x in a:
+				#		if x != "":
+				#			b.append(int(x, 16))
+				#	dout[k] = bytes(b) #bytes(((int(x, 16) if x != "") for x in a))
+				#	continue
+				
 				l = int(self._dz_format_dict[k][0][:-1])
-				dout[k] = (din[k] if k in din else b"").ljust(l, b'\x00')
+				if k in din:
+					print(k)
+					print(l)
+					print(type(din[k]))
+				
+				# variable = ((din[k].decode("utf-8") if type(din[k]) is bytes else din[k]) if k in din else b"")
+				variable = ((din[k].encode("ascii") if type(din[k]) is str else din[k]) if k in din else b"")
+				variable = (variable.encode("ascii") if type(variable) is str else variable)
+				print(type(variable))
+				dout[k] = variable.ljust(l, b'\x00')
+				
 			elif not k in din and k in self._dz_collapsibles:
 				dout[k] = 0
 			else:
@@ -110,23 +131,23 @@ class DZChunk(DZStruct):
 	_dz_header = b"\x30\x12\x95\x78"
 
 	# Format string dict
-	#   itemName is the new dict key for the data to be stored under
-	#   formatString is the Python formatstring for struct.unpack()
-	#   collapse: boolean that controls whether extra \x00 's should be stripped
-	#             for integer types collapse set to True means that the value should always be zero
+	#	itemName is the new dict key for the data to be stored under
+	#	formatString is the Python formatstring for struct.unpack()
+	#	collapse: boolean that controls whether extra \x00 's should be stripped
+	#			  for integer types collapse set to True means that the value should always be zero
 	# Example:
-	#   ('itemName', ('formatString', collapse))
+	#	('itemName', ('formatString', collapse))
 	_dz_format_dict = OrderedDict([
-		('header',	('4s',   False)),	# magic number
-		('sliceName',	('32s',  True)),	# name of our slice
-		('chunkName',	('64s',  True)),	# name of our chunk
-		('targetSize',	('I',    False)),	# bytes of target area
-		('dataSize',	('I',    False)),	# amount of compressed
-		('md5',		('16s',  False)),	# MD5 of target image
-		('targetAddr',	('I',    False)),	# first block to write
-		('trimCount',	('I',    False)),	# blocks to TRIM before
-		('dev',		('I',    False)),	# flash device Id
-		('crc32',	('I',    False)),	# CRC32 of target image
+		('header',	('4s',	 False)),	# magic number
+		('sliceName',	('32s',	 True)),	# name of our slice
+		('chunkName',	('64s',	 True)),	# name of our chunk
+		('targetSize',	('I',	 False)),	# bytes of target area
+		('dataSize',	('I',	 False)),	# amount of compressed
+		('md5',		('16s',	 False)),	# MD5 of target image
+		('targetAddr',	('I',	 False)),	# first block to write
+		('trimCount',	('I',	 False)),	# blocks to TRIM before
+		('dev',		('I',	 False)),	# flash device Id
+		('crc32',	('I',	 False)),	# CRC32 of target image
 		('pad',		('372s', True)),	# currently always zero
 	])
 
@@ -147,36 +168,45 @@ class DZFile(DZStruct):
 	_dz_header = b"\x32\x96\x18\x74"
 
 	# Format string dict
-	#   itemName is the new dict key for the data to be stored under
-	#   formatString is the Python formatstring for struct.unpack()
-	#   collapse: boolean that controls whether extra \x00 's should be stripped
-	#             for integer types collapse set to True means that the value should always be zero
+	#	itemName is the new dict key for the data to be stored under
+	#	formatString is the Python formatstring for struct.unpack()
+	#	collapse: boolean that controls whether extra \x00 's should be stripped
+	#			  for integer types collapse set to True means that the value should always be zero
 	# Example:
-	#   ('itemName', ('formatString', collapse))
+	#	('itemName', ('formatString', collapse))
 	_dz_format_dict = OrderedDict([
-		('header',	('4s',   False)),	# magic number
-		('formatMajor',	('I',    False)),	# always 2 in LE
-		('formatMinor',	('I',    False)),	# always 1 in LE
-		('reserved0',	('I',    True)),	# format patchlevel?
-		('device',	('32s',  True)),
-		('version',	('144s', True)),	# "factoryversion"
-		('chunkCount',	('I',    False)),
-		('md5',		('16s',  False)),	# MD5 of chunk headers
-		('unknown0',	('I',    False)),	# 256?
-		('reserved1',	('I',    True)),	# currently always zero
-		('reserved4',	('H',    True)),	# currently always zero
-		('unknown1',	('16s',  False)),	# unknown, MD5 of thing?
-		('unknown2',	('50s',  True)),	# A##-M##-C##-U##-0 ?
-		('buildType',	('20s',  True)),	# "user"???
-		('unknown3',	('4s',   False)),	# version code?  CRC?
-		('androidVer',	('10s',  True)),	# Android ver, optional
+		('header',	('4s',	 False)),	# magic number
+		('formatMajor',	('I',	 False)),	# always 2 in LE
+		('formatMinor',	('I',	 False)),	# always 1 in LE
+		('reserved0',	('I',	 True)),	# format patchlevel?
+		('device',	('32s',	 True)),
+		('version',	('121s', True)),	# "factoryversion"
+		('unknown9',	('23s',	 False)),	# md5? zeros
+		('chunkCount',	('I',	 False)),
+		('md5',		('16s',	 False)),	# MD5 of chunk headers
+		('unknown0',	('I',	 False)),	# 256?
+		('reserved1',	('I',	 True)),	# currently always zero
+		('reserved4',	('H',	 True)),	# currently always zero
+		('unknown1',	('16s',	 False)),	# unknown, MD5 of thing?
+		('unknown2',	('50s',	 True)),	# A##-M##-C##-U##-0 ?
+		('buildType',	('20s',	 True)),	# "user"???
+		('unknown3',	('4s',	 False)),	# version code?	 CRC?
+		('androidVer',	('10s',	 True)),	# Android ver, optional
 #anti-rollback minimum date? absent from Lollipop, "122142720" on all other V10
 		('oldDateCode',	('10s',	 True)),	# prior firmware date?
-		('reserved5',	('I',    True)),	# currently always zero
-		('unknown4',	('I',    False)),	# sometimes 256?
-		('unknown5',	('Q',    False)),	# ???
-		('pad',		('164s', True)),	# currently always zero
+		('reserved5',	('I',	 False)),	# currently always zero
+		('unknown4',	('I',	 False)),	# sometimes 256?
+		('unknown5',	('I',	 False)),	# ???
+		('unknown6',	('64s',	 False)),	# ???
+		('unknown7',	('32s',	 False)),	# ???
+		('unknown8',	('8s',	 False)),	# always zero
+		('pad',		('64s', True)),	# currently always zero
 	])
+	
+	#('unknown9',	('23s',	 False)),	# md5?
+	#	('unknown6',	('64s',	 False)),	# ???
+	#	('unknown7',	('32s',	 False)),	# ???
+	#	('unknown8',	('8s',	 False)),	# ???
 
 	def __init__(self):
 		"""
